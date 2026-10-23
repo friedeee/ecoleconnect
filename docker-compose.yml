@@ -1,0 +1,30 @@
+# Local services for EcoleConnect: `docker compose up -d` starts the PostgreSQL database.
+# Credentials come from the .env file (DB_DATABASE, DB_USERNAME, DB_PASSWORD), read automatically by Compose.
+name: ecoleconnect
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ecoleconnect-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-ecoleconnect}
+      POSTGRES_USER: ${DB_USERNAME:-ecoleconnect}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Définissez DB_PASSWORD dans le fichier .env}
+    ports:
+      # Only reachable from this computer.
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs once, when the volume is empty: creates the database used by the tests.
+      - ./docker/postgres/create-test-database.sql:/docker-entrypoint-initdb.d/create-test-database.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
+    # Same volume as the database created before this file: existing data is kept.
+    name: ecoleconnect-pgdata
