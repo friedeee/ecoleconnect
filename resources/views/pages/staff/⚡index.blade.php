@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\Role;
 use App\Enums\Section;
 use App\Models\User;
@@ -94,6 +95,7 @@ new #[Title('Personnel')] class extends Component
         $this->reset(['name', 'email', 'phone', 'role']);
         $this->mount();
         $this->temporaryPassword = $user->email.' — mot de passe : '.$password;
+        ActivityLog::record('staff.created', 'Compte créé : '.$user->name.' ('.$user->role->label().', '.$user->email.')', $user);
         unset($this->staff);
     }
 
@@ -106,6 +108,7 @@ new #[Title('Personnel')] class extends Component
         abort_if($user === null || $user->is(auth()->user()), 403);
 
         $user->update(['is_active' => ! $user->is_active]);
+        ActivityLog::record('staff.'.($user->is_active ? 'reactivated' : 'deactivated'), 'Compte de '.$user->name.' '.($user->is_active ? 'réactivé' : 'désactivé'), $user);
         unset($this->staff);
     }
 };

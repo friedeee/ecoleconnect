@@ -22,6 +22,19 @@ class AuthenticationTest extends TestCase
         $this->get(route('login'))->assertOk()->assertSee('Connexion');
     }
 
+    public function test_parents_switch_the_login_form_to_their_phone_number(): void
+    {
+        Livewire::test('pages::auth.login')
+            ->assertSee('Adresse e-mail')
+            ->set('email', 'quelquechose')
+            ->set('audience', 'parent')
+            ->assertSee('Numéro de téléphone')
+            ->assertSee('Demandez vos identifiants')
+            ->assertSet('email', '')
+            ->set('audience', 'nimporte')
+            ->assertSet('audience', 'staff');
+    }
+
     public function test_password_fields_can_be_shown_while_typing(): void
     {
         $this->get(route('login'))

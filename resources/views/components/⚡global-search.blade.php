@@ -66,6 +66,7 @@ new class extends Component
             ['label' => 'Barème des frais', 'keywords' => 'tarifs tranches montants scolarite', 'route' => 'fees.schedule', 'ability' => 'manage-fee-schedule'],
             ['label' => 'Matières', 'keywords' => 'disciplines cours coefficients', 'route' => 'subjects.index', 'ability' => 'manage-school'],
             ['label' => 'Personnel', 'keywords' => 'enseignants professeurs comptes utilisateurs', 'route' => 'staff.index', 'ability' => 'manage-school'],
+            ['label' => 'Journal d\'activité', 'keywords' => 'historique modifications qui a fait audit traces', 'route' => 'activity', 'ability' => 'manage-whole-school'],
             ['label' => 'Paramètres', 'keywords' => 'ecole annee scolaire reglages', 'route' => 'settings', 'ability' => 'manage-whole-school'],
         ];
 

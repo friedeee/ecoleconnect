@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\PeriodType;
 use App\Models\AcademicYear;
 use App\Models\Assessment;
@@ -86,6 +87,8 @@ new #[Title('Paramètres')] class extends Component
 
         $this->school()->update(array_map(fn (string $value) => $value === '' ? null : $value, $validated));
 
+        ActivityLog::record('settings.school', 'Informations de l\'école modifiées', $this->school());
+
         session()->flash('status', 'Informations de l\'école enregistrées.');
         $this->redirectRoute('settings', navigate: true);
     }
@@ -116,6 +119,8 @@ new #[Title('Paramètres')] class extends Component
         }
 
         $school->update(['period_type' => $validated['period_type'], 'primary_scale' => (int) $validated['primary_scale']]);
+
+        ActivityLog::record('settings.grading', 'Bulletins : '.$school->period_type->label().', primaire noté sur '.$school->primary_scale, $school);
 
         session()->flash('status', 'Réglages des bulletins enregistrés.');
         $this->redirectRoute('settings', navigate: true);
@@ -153,6 +158,8 @@ new #[Title('Paramètres')] class extends Component
         DB::transaction(function () use ($year): void {
             AcademicYear::where('is_current', true)->update(['is_current' => false]);
             $year->update(['is_current' => true]);
+
+            ActivityLog::record('settings.year', 'Année '.$year->name.' devenue l\'année en cours', $year);
         });
 
         $this->school()->unsetRelation('currentAcademicYear');

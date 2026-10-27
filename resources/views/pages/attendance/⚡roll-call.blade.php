@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\AttendanceStatus;
 use App\Enums\DaySession;
 use App\Enums\Role;
@@ -147,6 +148,9 @@ new class extends Component
                 ]))->fill(['school_class_id' => $this->schoolClass->id, 'status' => $status])->save();
             }
         });
+
+        $counts = array_count_values(array_intersect_key($this->statuses, array_flip($studentIds)));
+        ActivityLog::record('attendance.roll-call', 'Appel '.$this->schoolClass->name.' du '.$this->day->format('d/m/Y').' ('.mb_strtolower($this->daySession->label()).') : '.($counts['absent'] ?? 0).' absent(s), '.($counts['late'] ?? 0).' retard(s)', $this->schoolClass);
 
         unset($this->rollCall);
         session()->flash('saved', 'Appel enregistré.');

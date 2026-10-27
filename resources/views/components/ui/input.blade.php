@@ -1,25 +1,33 @@
-@props(['label', 'name', 'hint' => null, 'type' => 'text'])
+@props(['label', 'name', 'hint' => null, 'type' => 'text', 'icon' => null])
 
 @php
     $classes = [
         'block w-full rounded-xl border-0 bg-white px-3.5 py-2.5 text-sm text-zinc-900 shadow-xs ring-1 ring-inset placeholder:text-zinc-400 focus:ring-2 focus:ring-inset focus:outline-none',
         'ring-red-400 focus:ring-red-500' => $errors->has($name),
         'ring-zinc-300 focus:ring-brand-500' => ! $errors->has($name),
-        // Room for the show/hide button.
+        // Room for the leading icon and for the show/hide button.
+        'pl-10' => $icon !== null,
         'pr-11' => $type === 'password',
     ];
 @endphp
 
 <x-ui.field :$label :$name :$hint :class="$attributes->get('class')">
-    @if ($type === 'password')
-        <div class="relative" x-data="{ visible: false }">
-            <input
-                id="{{ $name }}"
-                type="password"
-                x-bind:type="visible ? 'text' : 'password'"
-                wire:model="{{ $name }}"
-                {{ $attributes->except('class')->class($classes) }}
-            >
+    <div class="relative" @if ($type === 'password') x-data="{ visible: false }" @endif>
+        @if ($icon)
+            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-zinc-400">
+                <x-ui.icon :name="$icon" class="size-4.5" />
+            </span>
+        @endif
+
+        <input
+            id="{{ $name }}"
+            type="{{ $type }}"
+            @if ($type === 'password') x-bind:type="visible ? 'text' : 'password'" @endif
+            wire:model="{{ $name }}"
+            {{ $attributes->except('class')->class($classes) }}
+        >
+
+        @if ($type === 'password')
             <button
                 type="button"
                 x-on:click="visible = ! visible; $nextTick(() => $el.previousElementSibling.focus())"
@@ -34,13 +42,6 @@
                 <x-ui.icon name="eye-slash" class="size-5" x-show="! visible" />
                 <x-ui.icon name="eye" class="size-5" x-show="visible" x-cloak />
             </button>
-        </div>
-    @else
-        <input
-            id="{{ $name }}"
-            type="{{ $type }}"
-            wire:model="{{ $name }}"
-            {{ $attributes->except('class')->class($classes) }}
-        >
-    @endif
+        @endif
+    </div>
 </x-ui.field>

@@ -3,11 +3,16 @@
 namespace App\Providers;
 
 use App\Enums\Role;
+use App\Http\Middleware\EnsureParentAccess;
+use App\Http\Middleware\EnsurePasswordChanged;
+use App\Http\Middleware\EnsurePlatformAccess;
+use App\Http\Middleware\EnsureSchoolAccess;
 use App\Models\SchoolClass;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,6 +30,16 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureGates();
+
+        // Livewire actions (saving marks, collecting a payment…) are separate requests: they must go
+        // through the same checks as the page, so that a deactivated account or a suspended school
+        // cannot keep acting from a page left open.
+        Livewire::addPersistentMiddleware([
+            EnsurePasswordChanged::class,
+            EnsureSchoolAccess::class,
+            EnsureParentAccess::class,
+            EnsurePlatformAccess::class,
+        ]);
     }
 
     /**
@@ -32,6 +47,15 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function configureGates(): void
     {
+        // A deactivated account, or the staff of a suspended school, may do nothing at all.
+        Gate::before(function (User $user): ?bool {
+            if (! $user->is_active || ($user->school_id !== null && ! $user->school?->is_active)) {
+                return false;
+            }
+
+            return null;
+        });
+
         Gate::define('manage-platform', fn (User $user): bool => $user->is_active && $user->hasRole(Role::SuperAdmin));
 
         Gate::define('manage-school', fn (User $user): bool => $user->hasRole(Role::Admin));

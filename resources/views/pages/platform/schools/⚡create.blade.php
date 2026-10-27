@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\Cycle;
 use App\Models\School;
 use Illuminate\Support\Facades\Gate;
@@ -73,6 +74,7 @@ new #[Title('Ouvrir une école')] class extends Component
         ], trim($validated['admin_name']), $validated['admin_email'], $password);
 
         $this->credentials = ['school' => $school->name, 'email' => Str::lower($validated['admin_email']), 'password' => $password];
+        ActivityLog::record('platform.school-opened', 'École '.$school->name.' ouverte, administrateur '.$this->credentials['email'], $school);
         $this->reset(['name', 'city', 'address', 'phone', 'email', 'cycles', 'admin_name', 'admin_email']);
     }
 };

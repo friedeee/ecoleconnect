@@ -76,5 +76,6 @@ Route::middleware(['auth', 'password.fresh', 'school'])->group(function () {
         Route::livewire('/matieres', 'pages::subjects.index')->name('subjects.index');
         Route::livewire('/personnel', 'pages::staff.index')->name('staff.index');
         Route::livewire('/parametres', 'pages::settings')->middleware('can:manage-whole-school')->name('settings');
+        Route::livewire('/journal', 'pages::activity')->middleware('can:manage-whole-school')->name('activity');
     });
 });

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\PaymentMethod;
 use App\Models\Enrollment;
 use App\Models\FeeItem;
@@ -124,6 +125,7 @@ new class extends Component
         ], auth()->user());
 
         $this->lastPaymentId = $payment->id;
+        ActivityLog::record('payment.recorded', 'Paiement '.$payment->receipt_number.' de '.number_format($payment->amount, 0, ',', ' ').' F CFA reçu pour '.$this->enrollment->student->full_name.' ('.$payment->method->label().')', $payment);
         $this->showForm = false;
         unset($this->statement, $this->payments);
     }
@@ -135,6 +137,8 @@ new class extends Component
         abort_unless($this->optionalFees->contains('id', $feeItemId), 404);
 
         $this->enrollment->optionalFees()->toggle([$feeItemId]);
+        $fee = $this->optionalFees->firstWhere('id', $feeItemId);
+        ActivityLog::record('fees.optional-toggled', 'Frais optionnel « '.$fee->label.' » '.($this->enrollment->optionalFees()->whereKey($feeItemId)->exists() ? 'ajouté pour ' : 'retiré pour ').$this->enrollment->student->full_name, $this->enrollment);
         unset($this->statement, $this->takenOptionalFeeIds);
     }
 
@@ -158,6 +162,7 @@ new class extends Component
         abort_if($payment === null || $payment->isCancelled(), 404);
 
         $payment->cancel(auth()->user(), trim($this->cancellation_reason));
+        ActivityLog::record('payment.cancelled', 'Paiement '.$payment->receipt_number.' de '.number_format($payment->amount, 0, ',', ' ').' F CFA annulé ('.$this->enrollment->student->full_name.') : '.$payment->cancellation_reason, $payment);
 
         $this->reset(['cancellingId', 'cancellation_reason', 'lastPaymentId']);
         unset($this->statement, $this->payments);

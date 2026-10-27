@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\Gender;
 use App\Enums\GuardianRelationship;
 use App\Models\AcademicYear;
@@ -172,6 +173,8 @@ new class extends Component
 
             return $student;
         });
+
+        ActivityLog::record($this->student ? 'student.updated' : 'student.enrolled', ($this->student ? 'Dossier modifié : ' : 'Élève inscrit : ').$student->full_name.' ('.$student->registration_number.')', $student);
 
         session()->flash('status', $this->student ? 'Dossier de l\'élève mis à jour.' : 'Élève inscrit avec succès.');
 

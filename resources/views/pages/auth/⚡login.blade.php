@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -23,20 +24,52 @@ new #[Layout('layouts::guest')] #[Title('Connexion')] class extends Component
 
     public bool $remember = false;
 
+    /** Who is signing in, to label the identifier field: "staff" (e-mail) or "parent" (phone). */
+    public string $audience = 'staff';
+
+    public function updatedAudience(): void
+    {
+        $this->audience = $this->audience === 'parent' ? 'parent' : 'staff';
+        $this->reset('email');
+        $this->resetValidation();
+    }
+
     public function login(): void
     {
         $this->validate();
 
-        $throttleKey = Str::transliterate(Str::lower($this->email).'|'.request()->ip());
+        // Each tab only signs in its own accounts: staff with an e-mail address, parents with a phone number.
+        $isEmail = str_contains($this->email, '@');
 
-        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+        if ($this->audience === 'staff' && ! $isEmail) {
             throw ValidationException::withMessages([
-                'email' => 'Trop de tentatives. Réessayez dans '.RateLimiter::availableIn($throttleKey).' secondes.',
+                'email' => 'Saisissez votre adresse e-mail. Parent d\'élève ? Choisissez l\'onglet « Parent d\'élève ».',
             ]);
+        }
+
+        if ($this->audience === 'parent' && $isEmail) {
+            throw ValidationException::withMessages([
+                'email' => 'Saisissez votre numéro de téléphone. Membre du personnel ? Choisissez l\'onglet « Personnel ».',
+            ]);
+        }
+
+        // Two locks: one per account and computer, and one per account whatever the computer,
+        // so that changing networks does not allow guessing a password.
+        $identifier = $isEmail ? Str::lower(trim($this->email)) : User::normalizePhone($this->email);
+        $throttleKey = Str::transliterate($identifier.'|'.request()->ip());
+        $accountKey = 'login-account:'.Str::transliterate($identifier);
+
+        foreach ([[$throttleKey, 5], [$accountKey, 10]] as [$key, $maxAttempts]) {
+            if (RateLimiter::tooManyAttempts($key, $maxAttempts)) {
+                throw ValidationException::withMessages([
+                    'email' => 'Trop de tentatives. Réessayez dans '.ceil(RateLimiter::availableIn($key) / 60).' minute(s).',
+                ]);
+            }
         }
 
         if (! $this->attempt()) {
             RateLimiter::hit($throttleKey);
+            RateLimiter::hit($accountKey, 15 * 60);
 
             throw ValidationException::withMessages([
                 'email' => 'Ces identifiants ne correspondent à aucun compte actif.',
@@ -44,6 +77,8 @@ new #[Layout('layouts::guest')] #[Title('Connexion')] class extends Component
         }
 
         RateLimiter::clear($throttleKey);
+        RateLimiter::clear($accountKey);
+        ActivityLog::record('auth.login', 'Connexion', properties: ['agent' => mb_substr((string) request()->userAgent(), 0, 200)]);
         session()->regenerate();
 
         $this->redirectIntended(route('dashboard'), navigate: true);
@@ -54,8 +89,19 @@ new #[Layout('layouts::guest')] #[Title('Connexion')] class extends Component
      */
     protected function attempt(): bool
     {
-        if (str_contains($this->email, '@')) {
-            return Auth::attempt(['email' => Str::lower(trim($this->email)), 'password' => $this->password, 'is_active' => true], $this->remember);
+        if ($this->audience === 'staff') {
+            $user = User::where('email', Str::lower(trim($this->email)))
+                ->where('is_active', true)
+                ->where('role', '!=', Role::Parent->value)
+                ->first();
+
+            if ($user === null || ! Hash::check($this->password, $user->password)) {
+                return false;
+            }
+
+            Auth::login($user, $this->remember);
+
+            return true;
         }
 
         $phone = User::normalizePhone($this->email);
@@ -79,23 +125,81 @@ new #[Layout('layouts::guest')] #[Title('Connexion')] class extends Component
 ?>
 
 <div>
-    <h1 class="text-2xl font-semibold tracking-tight">Bon retour</h1>
-    <p class="mt-1.5 text-sm text-zinc-500">Personnel de l'école ou parent d'élève, connectez-vous à votre espace.</p>
+    <h1 class="text-2xl font-semibold tracking-tight text-zinc-950">Bon retour</h1>
+    <p class="mt-1.5 text-sm text-zinc-500">Connectez-vous à votre espace ÉcoleConnect.</p>
 
-    <form wire:submit="login" class="mt-8 space-y-5">
-        <x-ui.input label="E-mail ou numéro de téléphone" name="email" autocomplete="username" placeholder="vous@ecole.bj ou 01 97 00 00 00" hint="Parents : utilisez le numéro de téléphone donné à l'école." autofocus />
-        <x-ui.input label="Mot de passe" name="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+    <div class="mt-7 grid grid-cols-2 rounded-xl bg-zinc-100 p-1 text-sm font-medium" role="tablist" aria-label="Je suis">
+        @foreach (['staff' => ['briefcase', 'Personnel'], 'parent' => ['users', 'Parent d\'élève']] as $value => [$icon, $label])
+            <button
+                type="button"
+                role="tab"
+                wire:key="audience-{{ $value }}"
+                wire:click="$set('audience', '{{ $value }}')"
+                aria-selected="{{ $audience === $value ? 'true' : 'false' }}"
+                @class([
+                    'flex items-center justify-center gap-2 rounded-lg px-3 py-2 transition',
+                    'bg-white text-zinc-900 shadow-sm' => $audience === $value,
+                    'text-zinc-500 hover:text-zinc-800' => $audience !== $value,
+                ])
+            >
+                <x-ui.icon :name="$icon" class="size-4" />
+                {{ $label }}
+            </button>
+        @endforeach
+    </div>
+
+    <form wire:submit="login" class="mt-6 space-y-5">
+        @if ($audience === 'parent')
+            <x-ui.input
+                wire:key="identifier-parent"
+                label="Numéro de téléphone"
+                name="email"
+                type="tel"
+                icon="phone"
+                inputmode="tel"
+                autocomplete="username"
+                placeholder="01 97 00 00 00"
+                hint="Le numéro que vous avez donné à l'école lors de l'inscription."
+                autofocus
+            />
+        @else
+            <x-ui.input
+                wire:key="identifier-staff"
+                label="Adresse e-mail"
+                name="email"
+                type="email"
+                icon="envelope"
+                autocomplete="username"
+                placeholder="vous@ecole.bj"
+                autofocus
+            />
+        @endif
+
+        <x-ui.input label="Mot de passe" name="password" type="password" icon="lock" autocomplete="current-password" placeholder="••••••••" />
 
         <label class="flex items-center gap-2 text-sm text-zinc-600">
             <input type="checkbox" wire:model="remember" class="size-4 rounded border-zinc-300 accent-brand-600">
-            Rester connecté
+            Rester connecté sur cet appareil
         </label>
 
-        <x-ui.button class="w-full">
+        <x-ui.button class="w-full py-3" wire:loading.attr="disabled" wire:target="login">
+            <svg wire:loading wire:target="login" class="size-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" class="opacity-25" />
+                <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+            </svg>
             <span wire:loading.remove wire:target="login">Se connecter</span>
             <span wire:loading wire:target="login">Connexion…</span>
         </x-ui.button>
     </form>
 
-    <p class="mt-8 text-center text-xs text-zinc-400">Mot de passe oublié ? Contactez l'administration de votre école.</p>
+    <div class="mt-8 flex items-start gap-3 rounded-xl bg-zinc-50 px-4 py-3 text-xs text-zinc-500 ring-1 ring-zinc-200/70">
+        <x-ui.icon name="lock" class="mt-0.5 size-4 text-zinc-400" />
+        <p>
+            @if ($audience === 'parent')
+                Pas encore d'accès, ou mot de passe oublié ? Demandez vos identifiants à l'administration de l'école de votre enfant.
+            @else
+                Mot de passe oublié ? Demandez à l'administrateur de votre école de vous en donner un nouveau.
+            @endif
+        </p>
+    </div>
 </div>

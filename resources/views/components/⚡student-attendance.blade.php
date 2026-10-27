@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Models\Absence;
 use App\Models\Enrollment;
 use Illuminate\Database\Eloquent\Collection;
@@ -59,6 +60,8 @@ new class extends Component
         $absence->fill(['is_justified' => true, 'reason' => trim($this->reason)]);
         $absence->forceFill(['justified_by' => auth()->id()])->save();
 
+        ActivityLog::record('attendance.justified', 'Absence de '.$absence->student->full_name.' du '.$absence->date->format('d/m/Y').' justifiée : '.$absence->reason, $absence);
+
         $this->reset(['justifyingId', 'reason']);
         unset($this->absences);
     }
@@ -70,6 +73,8 @@ new class extends Component
         $absence = $this->absences->firstWhere('id', $absenceId) ?? abort(404);
         $absence->fill(['is_justified' => false, 'reason' => null]);
         $absence->forceFill(['justified_by' => null])->save();
+
+        ActivityLog::record('attendance.unjustified', 'Justification retirée : absence de '.$absence->student->full_name.' du '.$absence->date->format('d/m/Y'), $absence);
 
         unset($this->absences);
     }

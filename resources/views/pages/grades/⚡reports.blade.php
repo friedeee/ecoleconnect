@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Models\AcademicYear;
 use App\Models\GradingPeriod;
 use App\Models\SchoolClass;
@@ -77,6 +78,8 @@ new #[Title('Bulletins')] class extends Component
         Gate::authorize('manage-whole-school');
 
         $this->period->forceFill(['locked_at' => $this->period->isLocked() ? null : now()])->save();
+
+        ActivityLog::record('report-cards.'.($this->period->isLocked() ? 'locked' : 'unlocked'), $this->period->name.' '.($this->period->isLocked() ? 'verrouillé : notes figées' : 'déverrouillé : notes de nouveau modifiables'), $this->period);
         unset($this->periods, $this->period);
     }
 };

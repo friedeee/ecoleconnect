@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\AssessmentKind;
+use App\Models\ActivityLog;
 use App\Models\Assessment;
 use App\Models\GradingPeriod;
 use App\Models\Mark;
@@ -204,6 +205,8 @@ new class extends Component
         ]);
         $assessment->forceFill(['created_by' => auth()->id()])->save();
 
+        ActivityLog::record('assessment.created', $this->subject->name.' · '.$this->schoolClass->name.' : '.mb_strtolower($assessment->kind->label()).' du '.$assessment->held_on->format('d/m/Y').' ajoutée', $assessment);
+
         $this->showForm = false;
         unset($this->assessments, $this->headings, $this->availableKinds);
         $this->loadScores();
@@ -214,7 +217,17 @@ new class extends Component
         Gate::authorize('grade', [$this->schoolClass, $this->subject]);
         abort_if($this->period->isLocked(), 403);
 
-        ($this->assessments->firstWhere('id', $assessmentId) ?? abort(404))->delete();
+        $assessment = $this->assessments->firstWhere('id', $assessmentId) ?? abort(404);
+        $markCount = $assessment->marks->count();
+        $assessment->delete();
+
+        ActivityLog::record('assessment.deleted', $this->subject->name.' · '.$this->schoolClass->name.' : '.$this->headings[$assessment->id].' du '.$assessment->held_on->format('d/m/Y').' supprimée avec ses '.$markCount.' note(s)', $assessment, [
+            'marks' => $assessment->marks->map(fn (Mark $mark) => [
+                'student' => $this->students->firstWhere('id', $mark->student_id)?->full_name,
+                'old' => $this->displayMark($mark),
+                'new' => '—',
+            ])->values()->all(),
+        ]);
 
         unset($this->assessments, $this->headings, $this->availableKinds);
         $this->loadScores();
@@ -261,6 +274,22 @@ new class extends Component
             return;
         }
 
+        // Old and new value of every mark that changes, for the activity log.
+        $changes = [];
+
+        foreach ($rows as [$assessment, $student, $value]) {
+            $old = $this->displayMark($assessment->marks->firstWhere('student_id', $student->id));
+            $new = match (true) {
+                $value === null => '—',
+                $value === 'absent' => 'abs',
+                default => rtrim(rtrim(number_format($value, 2, ',', ''), '0'), ','),
+            };
+
+            if ($old !== $new) {
+                $changes[$assessment->id][] = ['student' => $student->full_name, 'old' => $old, 'new' => $new];
+            }
+        }
+
         DB::transaction(function () use ($rows): void {
             foreach ($rows as [$assessment, $student, $value]) {
                 if ($value === null) {
@@ -274,9 +303,32 @@ new class extends Component
             }
         });
 
+        foreach ($changes as $assessmentId => $assessmentChanges) {
+            $assessment = $this->assessments->firstWhere('id', $assessmentId);
+
+            ActivityLog::record(
+                'marks.updated',
+                $this->subject->name.' · '.$this->schoolClass->name.' · '.$this->headings[$assessmentId].' du '.$assessment->held_on->format('d/m/Y').' : '.count($assessmentChanges).' note(s) saisie(s) ou modifiée(s)',
+                $assessment,
+                ['changes' => $assessmentChanges],
+            );
+        }
+
         unset($this->assessments, $this->headings, $this->availableKinds);
         $this->loadScores();
         session()->flash('saved', 'Notes enregistrées.');
+    }
+
+    /**
+     * A mark as shown in the activity log: "12,5", "abs", or "—" when there is none.
+     */
+    protected function displayMark(?Mark $mark): string
+    {
+        return match (true) {
+            $mark === null => '—',
+            $mark->is_absent => 'abs',
+            default => rtrim(rtrim(number_format($mark->score, 2, ',', ''), '0'), ','),
+        };
     }
 
     public function render()

@@ -26,6 +26,7 @@
         'Administration' => [
             ['label' => 'Matières', 'icon' => 'book-open', 'route' => 'subjects.index', 'active' => 'subjects.*', 'ability' => 'manage-school'],
             ['label' => 'Personnel', 'icon' => 'briefcase', 'route' => 'staff.index', 'active' => 'staff.*', 'ability' => 'manage-school'],
+            ['label' => 'Journal d\'activité', 'icon' => 'clock', 'route' => 'activity', 'active' => 'activity', 'ability' => 'manage-whole-school'],
             ['label' => 'Paramètres', 'icon' => 'settings', 'route' => 'settings', 'active' => 'settings', 'ability' => 'manage-whole-school'],
         ],
     ];

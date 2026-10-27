@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\Role;
 use App\Models\School;
 use Illuminate\Database\Eloquent\Builder;
@@ -38,6 +39,7 @@ new #[Title('Écoles')] class extends Component
 
         $school = School::findOrFail($schoolId);
         $school->update(['is_active' => ! $school->is_active]);
+        ActivityLog::record('platform.school-'.($school->is_active ? 'reactivated' : 'suspended'), 'École '.$school->name.' '.($school->is_active ? 'réactivée' : 'suspendue'), $school);
         unset($this->schools);
     }
 };

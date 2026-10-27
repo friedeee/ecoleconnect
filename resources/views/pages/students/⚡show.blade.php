@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\GuardianRelationship;
 use App\Models\Guardian;
 use App\Models\Student;
@@ -39,6 +40,7 @@ new class extends Component
         $password = $guardian->openPortalAccount();
 
         $this->credentials = ['name' => $guardian->full_name, 'phone' => $guardian->phone, 'password' => $password];
+        ActivityLog::record('parent-access.opened', 'Accès parent ouvert ou mot de passe renouvelé : '.$guardian->full_name.' ('.$guardian->phone.')', $guardian);
         $this->student->load('guardians.user');
     }
 
@@ -48,6 +50,7 @@ new class extends Component
 
         $user = $this->guardian($guardianId)->user ?? abort(404);
         $user->forceFill(['is_active' => ! $user->is_active])->save();
+        ActivityLog::record('parent-access.'.($user->is_active ? 'reactivated' : 'deactivated'), 'Accès parent de '.$user->name.' '.($user->is_active ? 'réactivé' : 'désactivé'), $user);
 
         $this->student->load('guardians.user');
     }

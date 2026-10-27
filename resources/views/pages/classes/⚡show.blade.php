@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\Role;
 use App\Models\SchoolClass;
 use App\Models\Subject;
@@ -130,6 +131,10 @@ new class extends Component
                 'phone' => $guardian->phone,
                 'password' => $guardian->openPortalAccount(),
             ];
+        }
+
+        if ($this->parentAccesses !== []) {
+            ActivityLog::record('parent-access.opened', count($this->parentAccesses).' accès parents ouverts pour la classe '.$this->schoolClass->name, $this->schoolClass);
         }
 
         if ($this->parentAccesses === []) {

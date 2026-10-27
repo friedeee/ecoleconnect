@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Enums\ClassLevel;
 use App\Models\AcademicYear;
 use App\Models\FeeItem;
@@ -125,6 +126,7 @@ new #[Title('Barème des frais')] class extends Component
         ], attributes: ['label' => 'libellé', 'amount' => 'montant', 'due_on' => 'échéance']);
 
         $item = $this->editingId ? ($this->items->firstWhere('id', $this->editingId) ?? abort(404)) : new FeeItem;
+        $before = $item->exists ? $item->label.' : '.number_format($item->amount, 0, ',', ' ').' F CFA' : null;
         $item->fill([
             'academic_year_id' => $this->currentYear->id,
             'level' => $this->level,
@@ -134,6 +136,8 @@ new #[Title('Barème des frais')] class extends Component
             'is_optional' => $validated['is_optional'],
         ])->save();
 
+        ActivityLog::record('fees.schedule-changed', 'Barème '.$this->level.' : « '.$item->label.' » '.($before ? 'modifié' : 'ajouté').' — '.number_format($item->amount, 0, ',', ' ').' F CFA', $item, $before ? ['changes' => [['student' => 'Avant', 'old' => $before, 'new' => $item->label.' : '.number_format($item->amount, 0, ',', ' ').' F CFA']]] : []);
+
         $this->cancel();
         unset($this->items, $this->summary);
     }
@@ -142,7 +146,10 @@ new #[Title('Barème des frais')] class extends Component
     {
         Gate::authorize('manage-fee-schedule');
 
-        ($this->items->firstWhere('id', $itemId) ?? abort(404))->delete();
+        $item = $this->items->firstWhere('id', $itemId) ?? abort(404);
+        $item->delete();
+
+        ActivityLog::record('fees.schedule-changed', 'Barème '.$this->level.' : « '.$item->label.' » ('.number_format($item->amount, 0, ',', ' ').' F CFA) supprimé', $item);
         unset($this->items, $this->summary);
     }
 
@@ -168,6 +175,8 @@ new #[Title('Barème des frais')] class extends Component
                 $item->replicate()->fill(['level' => $level])->save();
             }
         }
+
+        ActivityLog::record('fees.schedule-changed', 'Barème '.$this->level.' copié vers '.implode(', ', $this->copyTo));
 
         $this->copyTo = [];
         unset($this->summary);

@@ -77,7 +77,7 @@ class ParentPortalTest extends TestCase
         $this->assertSame('0197112233', $user->phone);
         $this->assertTrue($user->must_change_password);
         $this->assertNull($user->email);
-        $this->assertSame(8, strlen($component->get('credentials')['password']));
+        $this->assertMatchesRegularExpression('/^[a-z2-9]{4}-[a-z2-9]{4}$/', $component->get('credentials')['password']);
     }
 
     public function test_a_parent_signs_in_with_their_phone_and_must_choose_a_password(): void
@@ -85,6 +85,7 @@ class ParentPortalTest extends TestCase
         $password = $this->guardian->openPortalAccount();
 
         Livewire::test('pages::auth.login')
+            ->set('audience', 'parent')
             ->set('email', '01 97 11 22 33')
             ->set('password', $password)
             ->call('login')
@@ -109,11 +110,33 @@ class ParentPortalTest extends TestCase
         $password = $this->guardian->openPortalAccount();
 
         foreach (['+229 01 97 11 22 33', '0197112233', '229 0197112233'] as $phone) {
-            Livewire::test('pages::auth.login')->set('email', $phone)->set('password', $password)->call('login')->assertHasNoErrors();
+            Livewire::test('pages::auth.login')->set('audience', 'parent')->set('email', $phone)->set('password', $password)->call('login')->assertHasNoErrors();
             auth()->logout();
         }
 
-        Livewire::test('pages::auth.login')->set('email', '0197112233')->set('password', 'mauvais')->call('login')->assertHasErrors('email');
+        Livewire::test('pages::auth.login')->set('audience', 'parent')->set('email', '0197112233')->set('password', 'mauvais')->call('login')->assertHasErrors('email');
+    }
+
+    public function test_each_login_tab_only_accepts_its_own_accounts(): void
+    {
+        $password = $this->guardian->openPortalAccount();
+
+        Livewire::test('pages::auth.login')
+            ->set('email', '0197112233')
+            ->set('password', $password)
+            ->call('login')
+            ->assertHasErrors('email')
+            ->assertSee('Choisissez l&#039;onglet « Parent d&#039;élève »', escape: false);
+
+        Livewire::test('pages::auth.login')
+            ->set('audience', 'parent')
+            ->set('email', $this->admin->email)
+            ->set('password', 'password')
+            ->call('login')
+            ->assertHasErrors('email')
+            ->assertSee('Choisissez l&#039;onglet « Personnel »', escape: false);
+
+        $this->assertGuest();
     }
 
     public function test_a_parent_only_sees_their_own_children(): void

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ActivityLog;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Livewire\Attributes\Layout;
@@ -31,6 +32,8 @@ new #[Layout('layouts::guest')] #[Title('Mot de passe')] class extends Component
         }
 
         $user->forceFill(['password' => $this->password, 'must_change_password' => false])->save();
+
+        ActivityLog::record('auth.password-changed', 'Mot de passe changé');
 
         session()->regenerate();
         session()->flash('status', 'Votre mot de passe a été enregistré.');
